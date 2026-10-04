@@ -12,5 +12,6 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY monitor.py ./
+COPY tests/ ./tests/
 USER 10001:10001
 ENTRYPOINT ["python", "/app/monitor.py"]

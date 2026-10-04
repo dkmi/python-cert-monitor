@@ -33,6 +33,7 @@ jobs:
           tags: cert-monitor:test
       - name: Container smoke tests
         run: |
+          docker run --rm --entrypoint python cert-monitor:test -m unittest discover -s tests -v
           docker run --rm cert-monitor:test --help
           docker run --rm --read-only --cap-drop ALL --entrypoint python cert-monitor:test -c 'import os, ssl; assert os.getuid() == 10001; assert ssl.create_default_context().get_ca_certs()'
           docker volume create cert-monitor-test-state

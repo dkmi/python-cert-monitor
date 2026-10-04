@@ -1,0 +1,8 @@
+services:
+  cert-monitor:
+    secrets:
+      - smtp_password
+
+secrets:
+  smtp_password:
+    file: ./secrets/smtp_password.txt

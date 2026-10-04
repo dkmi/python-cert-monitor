@@ -2,3 +2,5 @@
 !Dockerfile
 !monitor.py
 !requirements.txt
+!tests/
+!tests/**

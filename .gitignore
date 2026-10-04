@@ -9,3 +9,4 @@ state.json
 config.local.json
 sites.local.txt
 config/
+secrets/

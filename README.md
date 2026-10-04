@@ -1,6 +1,6 @@
 # Python TLS certificate monitor — Linux / systemd
 
-Requires Python 3.10+, cryptography, and an SMTP relay that accepts mail from this server without authentication. No username, password, or SMTP AUTH is used.
+Requires Python 3.10+, cryptography, and an SMTP server. Authentication is optional; existing configurations continue to send without authentication.
 
 Checks certificates every hour, warns when 10 days or less remain, and repeats the combined warning every 24 hours. Also reports expired/not-yet-valid certificates and connection failures. Sends a recovery message when all currently configured endpoints are healthy. No cron is required.
 
@@ -17,7 +17,7 @@ cp config.json sites.txt config/
 
 Edit `config/config.json` with your SMTP relay and email addresses, and `config/sites.txt` with your endpoints. Keep `sites_file` and `state_file` at their default container paths. The `config/` directory is ignored by Git. Files must be readable by container UID 10001 (for example, directory mode 755 and file mode 644).
 
-For SMTP on port **465**, use **"security": "ssl"**. Use `starttls` only with an SMTP port that supports STARTTLS, usually 587 or 25. SMTP authentication is never attempted.
+For SMTP on port **465**, use **"security": "ssl"**. Use `starttls` only with an SMTP port that supports STARTTLS, usually 587 or 25. SMTP authentication is optional; see the section below.
 
 ```bash
 docker compose pull
@@ -75,6 +75,33 @@ The new volume initially has no notification history, so active warnings will be
 
 GitHub Actions smoke-tests the container, including non-root execution, CA certificates, mounted configuration, and persistent state. Successful builds on main publish `latest` and a commit tag to GHCR; version tags such as v1.0.0 publish a versioned image. Pull requests build and test without publishing. Production SMTP delivery must still be tested against your relay.
 
+## Optional SMTP authentication (Docker)
+
+Existing configurations without `smtp.username` continue to work without authentication. For authenticated SMTP, add these fields inside the existing `smtp` object:
+
+```json
+"username": "monitor@example.com",
+"password_file": "/run/secrets/smtp_password"
+```
+
+Keep `security: "ssl"` for port 465, or `starttls` for a STARTTLS-enabled port. Authentication on plain SMTP is rejected. The password file takes precedence over the `SMTP_PASSWORD` environment variable. Missing or empty credentials fail without attempting unauthenticated delivery. Authentication errors do not fall back to relay mode.
+
+Create `secrets/smtp_password.txt` containing only the password (a final newline is allowed). This directory is ignored by Git and excluded from the image. Compose file-backed secrets must be readable by container UID 10001; for example, protect the host directory with mode 700 and give the file mode 644:
+
+```bash
+mkdir -p secrets
+chmod 700 secrets
+nano secrets/smtp_password.txt
+chmod 644 secrets/smtp_password.txt
+docker compose -f compose.yaml -f compose.auth.yaml pull
+docker compose -f compose.yaml -f compose.auth.yaml run --rm cert-monitor --test-mail
+docker compose -f compose.yaml -f compose.auth.yaml up -d --force-recreate
+```
+
+Use both compose files for subsequent commands in authenticated mode. Keep any existing CA bundle mount/environment settings in compose.yaml; updating the image does not require replacing that file. The SMTP account must be permitted to send as the configured `from` address.
+
+Alternatively, omit `password_file` and pass `SMTP_PASSWORD` into the container using a Compose environment setting. Do not put a password in config.json. To disable authentication, remove `username` or set it to `""`, remove `password_file`, and recreate the container. The default compose.yaml does not require a secret.
+
 ## 1. Install without Docker (Debian / Ubuntu)
 
 Extract the archive, enter the python-cert-monitor directory, then run:
@@ -126,7 +153,7 @@ SMTP configuration:
 }
 ```
 
-Replace the relay hostname and email addresses with your own. Configure the relay to permit sending from the monitoring server's IP address. Authentication is never attempted.
+Replace the relay hostname and email addresses with your own. Configure the relay to permit sending from the monitoring server's IP address. Omit username or set it to an empty string to send without authentication.
 
 Supported security settings:
 
@@ -134,7 +161,7 @@ Supported security settings:
 - starttls: SMTP upgraded to TLS; the relay must support STARTTLS.
 - ssl: TLS from the start, typically port 465.
 
-TLS modes validate the SMTP server certificate. Encryption settings do not enable authentication.
+TLS modes validate the SMTP server certificate. Authentication requires ssl or starttls; encryption alone does not enable authentication.
 
 Other settings:
 
@@ -188,7 +215,7 @@ The service checks immediately on startup, then waits for the configured interva
 
 ## Upgrading from the authentication-based package
 
-Replace monitor.py and cert-monitor.service with these versions. Update the smtp section in config.json as shown above; username is no longer used. The service no longer reads smtp.env. After installing the updated unit:
+Replace monitor.py and cert-monitor.service with these versions. Update the smtp section in config.json as shown above; username is optional; omit it to keep sending without authentication. The service no longer reads smtp.env. After installing the updated unit:
 
 ```bash
 sudo systemctl daemon-reload

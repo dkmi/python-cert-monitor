@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import os
 import signal
 import smtplib
 import socket
@@ -100,6 +101,17 @@ def scan(config):
 
 def send_mail(config, subject, body):
     smtp = config['smtp']
+    username = smtp.get('username', '')
+    password = None
+    if username:
+        if smtp['security'] not in ('ssl', 'starttls'):
+            raise ValueError('SMTP authentication requires ssl or starttls')
+        if smtp.get('password_file'):
+            password = Path(smtp['password_file']).read_text().rstrip('\r\n')
+        else:
+            password = os.environ.get('SMTP_PASSWORD')
+        if not password:
+            raise ValueError('Set smtp.password_file or SMTP_PASSWORD for SMTP authentication')
     message = EmailMessage()
     message['From'] = smtp['from']
     message['To'] = ', '.join(smtp['to'])
@@ -118,6 +130,8 @@ def send_mail(config, subject, body):
             client.ehlo()
             client.starttls(context=context)
             client.ehlo()
+        if username:
+            client.login(username, password)
         refused = client.send_message(message)
         if refused:
             raise RuntimeError(f'SMTP refused recipients: {list(refused)}')
