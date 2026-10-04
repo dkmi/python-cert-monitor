@@ -1,0 +1,25 @@
+[Unit]
+Description=TLS certificate expiry monitor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=cert-monitor
+Group=cert-monitor
+ExecStart=/opt/cert-monitor/venv/bin/python /opt/cert-monitor/monitor.py --config /etc/cert-monitor/config.json
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Restart=on-failure
+RestartSec=30
+StateDirectory=cert-monitor
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target

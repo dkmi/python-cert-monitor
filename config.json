@@ -1,0 +1,17 @@
+{
+  "sites_file": "/etc/cert-monitor/sites.txt",
+  "state_file": "/var/lib/cert-monitor/state.json",
+  "warning_days": 10,
+  "timeout_seconds": 10,
+  "check_interval_seconds": 3600,
+  "repeat_hours": 24,
+  "smtp": {
+    "host": "smtp-relay.example.com",
+    "port": 25,
+    "security": "none",
+    "from": "monitor@example.com",
+    "to": [
+      "admin@example.com"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+smtp.env
+state.json
+*.log
+config.local.json
+sites.local.txt
