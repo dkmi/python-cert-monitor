@@ -1,0 +1,27 @@
+services:
+  cert-monitor:
+    image: ghcr.io/dkmi/python-cert-monitor:latest
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 45s
+    volumes:
+      - type: bind
+        source: ./config
+        target: /etc/cert-monitor
+        read_only: true
+        bind:
+          create_host_path: false
+      - cert-monitor-state:/var/lib/cert-monitor
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+volumes:
+  cert-monitor-state:

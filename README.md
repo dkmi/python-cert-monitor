@@ -4,7 +4,78 @@ Requires Python 3.10+, cryptography, and an SMTP relay that accepts mail from th
 
 Checks certificates every hour, warns when 10 days or less remain, and repeats the combined warning every 24 hours. Also reports expired/not-yet-valid certificates and connection failures. Sends a recovery message when all currently configured endpoints are healthy. No cron is required.
 
-## 1. Install (Debian / Ubuntu)
+## Docker Compose (recommended)
+
+Prebuilt image: `ghcr.io/dkmi/python-cert-monitor:latest` for Linux amd64 and arm64. Docker Engine with the Docker Compose plugin is required. No Python installation or systemd unit is needed on the host.
+
+```bash
+git clone https://github.com/dkmi/python-cert-monitor.git
+cd python-cert-monitor
+mkdir -p config
+cp config.json sites.txt config/
+```
+
+Edit `config/config.json` with your SMTP relay and email addresses, and `config/sites.txt` with your endpoints. Keep `sites_file` and `state_file` at their default container paths. The `config/` directory is ignored by Git. Files must be readable by container UID 10001 (for example, directory mode 755 and file mode 644).
+
+For SMTP on port **465**, use **"security": "ssl"**. Use `starttls` only with an SMTP port that supports STARTTLS, usually 587 or 25. SMTP authentication is never attempted.
+
+```bash
+docker compose pull
+docker compose run --rm cert-monitor --dry-run
+docker compose run --rm cert-monitor --test-mail
+docker compose up -d
+docker compose logs -f --tail=100
+```
+
+`--dry-run` exits with code 1 if a certificate or endpoint has a problem. It sends no email. `--test-mail` sends a test message without checking endpoints. If GHCR returns an authentication error, the package is private: log in to `ghcr.io` with a GitHub token with `read:packages` access, or build locally as described below. Repository visibility and package visibility are separate settings.
+
+The container runs as UID/GID 10001 with a read-only root filesystem. Configuration is mounted read-only. A named Docker volume persists notification state across restarts and upgrades. No inbound ports are required. The whole config directory is mounted so replacing sites.txt with an editor is picked up on the next scan. Restart after editing config.json:
+
+```bash
+docker compose restart cert-monitor
+```
+
+Upgrade and stop:
+
+```bash
+docker compose pull
+docker compose up -d
+docker compose down
+```
+
+Do not use `docker compose down -v` unless you intend to delete notification state. Logs rotate automatically. For reproducible deployment, replace `latest` in compose.yaml with a published `sha-...` tag or image digest.
+
+### Build locally without registry access
+
+```bash
+docker build -t ghcr.io/dkmi/python-cert-monitor:latest .
+docker compose up -d --pull never
+```
+
+### Migrate from the existing systemd service
+
+Copy your working configuration and endpoint list instead of the examples:
+
+```bash
+mkdir -p config
+sudo cp /etc/cert-monitor/config.json /etc/cert-monitor/sites.txt config/
+sudo chown -R "$(id -u):$(id -g)" config
+chmod 755 config
+chmod 644 config/config.json config/sites.txt
+docker compose pull
+docker compose run --rm cert-monitor --dry-run
+docker compose run --rm cert-monitor --test-mail
+sudo systemctl disable --now cert-monitor.service
+docker compose up -d
+```
+
+The new volume initially has no notification history, so active warnings will be sent again on the first scan. Keep the old service stopped to avoid duplicate notifications. Existing systemd state is left in place. To roll back, run `docker compose down`, then `sudo systemctl enable --now cert-monitor.service`.
+
+### Image publishing
+
+GitHub Actions smoke-tests the container, including non-root execution, CA certificates, mounted configuration, and persistent state. Successful builds on main publish `latest` and a commit tag to GHCR; version tags such as v1.0.0 publish a versioned image. Pull requests build and test without publishing. Production SMTP delivery must still be tested against your relay.
+
+## 1. Install without Docker (Debian / Ubuntu)
 
 Extract the archive, enter the python-cert-monitor directory, then run:
 

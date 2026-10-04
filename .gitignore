@@ -8,3 +8,4 @@ state.json
 *.log
 config.local.json
 sites.local.txt
+config/

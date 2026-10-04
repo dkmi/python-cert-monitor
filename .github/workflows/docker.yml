@@ -1,0 +1,74 @@
+name: Build and publish Docker image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare example configuration
+        run: |
+          mkdir config
+          cp config.json sites.txt config/
+          docker compose config --quiet
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build local test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: cert-monitor:test
+      - name: Container smoke tests
+        run: |
+          docker run --rm cert-monitor:test --help
+          docker run --rm --read-only --cap-drop ALL --entrypoint python cert-monitor:test -c 'import os, ssl; assert os.getuid() == 10001; assert ssl.create_default_context().get_ca_certs()'
+          docker volume create cert-monitor-test-state
+          docker run --rm --read-only --cap-drop ALL -v cert-monitor-test-state:/var/lib/cert-monitor --entrypoint python cert-monitor:test -c 'from pathlib import Path; from monitor import save_state; save_state(Path("/var/lib/cert-monitor/state.json"), 123)'
+          docker run --rm --read-only -v cert-monitor-test-state:/var/lib/cert-monitor --entrypoint python cert-monitor:test -c 'from pathlib import Path; from monitor import load_state; assert load_state(Path("/var/lib/cert-monitor/state.json")) == 123'
+          docker volume rm cert-monitor-test-state
+          # Check mounted configuration and argument handling without sending email.
+          printf 'invalid/path\n' > config/sites.txt
+          set +e
+          docker run --rm --read-only -v "$PWD/config:/etc/cert-monitor:ro" cert-monitor:test --dry-run > /tmp/check.log 2>&1
+          result=$?
+          set -e
+          cat /tmp/check.log
+          test "$result" -eq 1
+          grep -q 'CHECK FAILED' /tmp/check.log
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/dkmi/python-cert-monitor
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha
+            type=semver,pattern={{version}}
+      - name: Build and publish
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
