@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import monitor
 
 class SMTPTests(unittest.TestCase):
@@ -14,7 +14,7 @@ class SMTPTests(unittest.TestCase):
     def test_no_auth_all_transports(self):
         for mode in ('none', 'ssl', 'starttls'):
             with self.subTest(mode=mode), patch('monitor.smtplib.SMTP') as plain, patch('monitor.smtplib.SMTP_SSL') as secure:
-                client = (secure if mode == 'ssl' else plain).return_value.__enter__.return_value
+                client = (secure if mode == 'ssl' else plain).return_value
                 client.send_message.return_value = {}
                 monitor.send_mail(self.config(mode), 'Test', 'Body')
                 client.login.assert_not_called()
@@ -23,7 +23,7 @@ class SMTPTests(unittest.TestCase):
     @patch.dict(os.environ, {'SMTP_PASSWORD': 'environment-password'}, clear=True)
     def test_auth_and_starttls_order(self):
         with patch('monitor.smtplib.SMTP') as smtp:
-            client = smtp.return_value.__enter__.return_value
+            client = smtp.return_value
             client.send_message.return_value = {}
             monitor.send_mail(self.config('starttls', username='user'), 'Test', 'Body')
             names = [call[0] for call in client.method_calls]
@@ -36,7 +36,7 @@ class SMTPTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, patch('monitor.smtplib.SMTP_SSL') as smtp:
             secret = Path(folder) / 'password'
             secret.write_text('secret with spaces \n')
-            client = smtp.return_value.__enter__.return_value
+            client = smtp.return_value
             client.send_message.return_value = {}
             monitor.send_mail(self.config(username='user', password_file=str(secret)), 'Test', 'Body')
             client.login.assert_called_once_with('user', 'secret with spaces ')
@@ -53,7 +53,7 @@ class SMTPTests(unittest.TestCase):
     @patch.dict(os.environ, {'SMTP_PASSWORD': 'wrong'}, clear=True)
     def test_failed_login_never_sends(self):
         with patch('monitor.smtplib.SMTP_SSL') as smtp:
-            client = smtp.return_value.__enter__.return_value
+            client = smtp.return_value
             client.login.side_effect = monitor.smtplib.SMTPAuthenticationError(535, b'Failed')
             with self.assertRaises(monitor.smtplib.SMTPAuthenticationError):
                 monitor.send_mail(self.config(username='user'), 'Test', 'Body')
